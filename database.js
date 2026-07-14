@@ -156,6 +156,79 @@ const deleteSermon = async (id) => {
   return true;
 };
 
+// --- READINGS ---
+
+const getAllReadings = async () => {
+  const { data, error } = await supabase
+    .from('readings')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+};
+
+const getReadingsSync = async (lastSync) => {
+  let query = supabase.from('readings').select('*');
+  
+  if (lastSync) {
+    query = query.gte('updated_at', lastSync);
+  }
+  
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+const addReading = async (date, title, bibleVerses, audioUrl) => {
+  const { data, error } = await supabase
+    .from('readings')
+    .insert([
+      { 
+        date, 
+        title, 
+        bible_verses: bibleVerses, 
+        audio_url: audioUrl
+      }
+    ])
+    .select();
+  
+  if (error) throw error;
+  return data[0];
+};
+
+const updateReading = async (id, date, title, bibleVerses, audioUrl) => {
+  const updateData = { 
+    date, 
+    title, 
+    bible_verses: bibleVerses, 
+    updated_at: new Date().toISOString() 
+  };
+  
+  if (audioUrl !== undefined) {
+    updateData.audio_url = audioUrl;
+  }
+  
+  const { data, error } = await supabase
+    .from('readings')
+    .update(updateData)
+    .eq('id', id)
+    .select();
+    
+  if (error) throw error;
+  return data && data.length > 0;
+};
+
+const deleteReading = async (id) => {
+  const { error } = await supabase
+    .from('readings')
+    .delete()
+    .eq('id', id);
+    
+  if (error) throw error;
+  return true;
+};
+
 module.exports = {
   supabase,
   getAllSongs,
@@ -167,5 +240,10 @@ module.exports = {
   getSermonsSync,
   addSermon,
   updateSermon,
-  deleteSermon
+  deleteSermon,
+  getAllReadings,
+  getReadingsSync,
+  addReading,
+  updateReading,
+  deleteReading
 };

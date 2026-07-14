@@ -273,6 +273,96 @@ app.delete('/api/sermons/:id', async (req, res) => {
   }
 });
 
+// --- READINGS ROUTES ---
+
+// POST: Add a new reading
+app.post('/api/readings', upload.single('audio'), async (req, res) => {
+  try {
+    const { date, title, bibleVerses } = req.body;
+    let audioUrl = null;
+
+    if (!date) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Date is required.' });
+    }
+
+    if (req.file) {
+      audioUrl = await uploadToSupabase(req.file, 'Readings');
+    }
+
+    const newReading = await db.addReading(date, title, bibleVerses, audioUrl);
+    res.status(201).json({ message: 'Reading added successfully', reading: newReading });
+  } catch (err) {
+    console.error('Error adding reading:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// GET: Sync readings
+app.get('/api/readings/sync', async (req, res) => {
+  try {
+    const lastSync = req.query.lastSync;
+    const readings = await db.getReadingsSync(lastSync);
+    res.json(readings);
+  } catch (err) {
+    console.error('Error syncing readings:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET: List all readings
+app.get('/api/readings', async (req, res) => {
+  try {
+    const readings = await db.getAllReadings();
+    res.json(readings);
+  } catch (err) {
+    console.error('Error fetching readings:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT: Update an existing reading
+app.put('/api/readings/:id', upload.single('audio'), async (req, res) => {
+  try {
+    const { date, title, bibleVerses } = req.body;
+    let audioUrl = undefined;
+
+    if (!date) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Date is required.' });
+    }
+
+    if (req.file) {
+      audioUrl = await uploadToSupabase(req.file, 'Readings');
+    }
+
+    const success = await db.updateReading(req.params.id, date, title, bibleVerses, audioUrl);
+    if (success) {
+      res.json({ message: 'Reading updated successfully' });
+    } else {
+      res.status(404).json({ error: 'Reading not found' });
+    }
+  } catch (err) {
+    console.error('Error updating reading:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// DELETE: Delete a reading
+app.delete('/api/readings/:id', async (req, res) => {
+  try {
+    const success = await db.deleteReading(req.params.id);
+    if (success) {
+      res.json({ message: 'Reading deleted successfully' });
+    } else {
+      res.status(404).json({ error: 'Reading not found' });
+    }
+  } catch (err) {
+    console.error('Error deleting reading:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Start the server
 app.listen(port, () => {
   console.log(`Hymn App Backend listening at http://localhost:${port}`);
