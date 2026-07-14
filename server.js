@@ -33,25 +33,28 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   fileFilter: (req, file, cb) => {
-    const allowedMimeTypes = ['audio/mpeg', 'audio/wav', 'audio/x-wav'];
-    const allowedExts = ['.mp3', '.wav'];
+    const allowedMimeTypes = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedExts = ['.mp3', '.wav', '.pdf', '.doc', '.docx'];
     const ext = path.extname(file.originalname).toLowerCase();
     
     if (allowedMimeTypes.includes(file.mimetype) || allowedExts.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only MP3 and WAV audio files are allowed!'), false);
+      cb(new Error('Invalid file type! Only MP3, WAV, PDF, DOC, DOCX are allowed.'), false);
     }
   }
 });
 
 // Helper function to upload to Supabase Storage
-async function uploadToSupabase(file) {
+// Helper function to upload to Supabase Storage
+async function uploadToSupabase(file, bucketOverride) {
+  const bucketName = bucketOverride || process.env.SUPABASE_BUCKET || 'Hymns';
   const fileBuffer = fs.readFileSync(file.path);
-  const fileName = `audio-${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
+  const prefix = file.mimetype.includes('audio') ? 'audio' : 'doc';
+  const fileName = `${prefix}-${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
   
   const { data, error } = await db.supabase.storage
-    .from(process.env.SUPABASE_BUCKET || 'Hymns')
+    .from(bucketName)
     .upload(fileName, fileBuffer, {
       contentType: file.mimetype,
       upsert: true
@@ -70,7 +73,7 @@ async function uploadToSupabase(file) {
 
   // Get Public URL
   const { data: { publicUrl } } = db.supabase.storage
-    .from(process.env.SUPABASE_BUCKET || 'Hymns')
+    .from(bucketName)
     .getPublicUrl(data.path);
 
   return publicUrl;
@@ -166,6 +169,106 @@ app.delete('/api/songs/:id', async (req, res) => {
     }
   } catch (err) {
     console.error('Error deleting song:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- SERMON ROUTES ---
+
+// POST: Add a new sermon
+app.post('/api/sermons', upload.single('document'), async (req, res) => {
+  try {
+    const { date, title, scriptureReading, memoryVerse, questions, content } = req.body;
+    let documentUrl = null;
+
+    if (!date || !title) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Date and title are required.' });
+    }
+
+    if (req.file) {
+      documentUrl = await uploadToSupabase(req.file, 'Sermons');
+    }
+
+    let parsedQuestions = [];
+    if (questions) {
+      try { parsedQuestions = JSON.parse(questions); } catch (e) { console.error('Error parsing questions JSON:', e); }
+    }
+
+    const newSermon = await db.addSermon(date, title, scriptureReading, memoryVerse, parsedQuestions, documentUrl, content);
+    res.status(201).json({ message: 'Sermon added successfully', sermon: newSermon });
+  } catch (err) {
+    console.error('Error adding sermon:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// GET: Sync sermons
+app.get('/api/sermons/sync', async (req, res) => {
+  try {
+    const lastSync = req.query.lastSync;
+    const sermons = await db.getSermonsSync(lastSync);
+    res.json(sermons);
+  } catch (err) {
+    console.error('Error syncing sermons:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET: List all sermons
+app.get('/api/sermons', async (req, res) => {
+  try {
+    const sermons = await db.getAllSermons();
+    res.json(sermons);
+  } catch (err) {
+    console.error('Error fetching sermons:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT: Update an existing sermon
+app.put('/api/sermons/:id', upload.single('document'), async (req, res) => {
+  try {
+    const { date, title, scriptureReading, memoryVerse, questions, content } = req.body;
+    let documentUrl = undefined;
+
+    if (!date || !title) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Date and title are required.' });
+    }
+
+    if (req.file) {
+      documentUrl = await uploadToSupabase(req.file, 'Sermons');
+    }
+
+    let parsedQuestions = [];
+    if (questions) {
+      try { parsedQuestions = JSON.parse(questions); } catch (e) { console.error('Error parsing questions JSON:', e); }
+    }
+
+    const success = await db.updateSermon(req.params.id, date, title, scriptureReading, memoryVerse, parsedQuestions, documentUrl, content);
+    if (success) {
+      res.json({ message: 'Sermon updated successfully' });
+    } else {
+      res.status(404).json({ error: 'Sermon not found' });
+    }
+  } catch (err) {
+    console.error('Error updating sermon:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// DELETE: Delete a sermon
+app.delete('/api/sermons/:id', async (req, res) => {
+  try {
+    const success = await db.deleteSermon(req.params.id);
+    if (success) {
+      res.json({ message: 'Sermon deleted successfully' });
+    } else {
+      res.status(404).json({ error: 'Sermon not found' });
+    }
+  } catch (err) {
+    console.error('Error deleting sermon:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

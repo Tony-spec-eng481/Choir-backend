@@ -77,11 +77,95 @@ const deleteSong = async (id) => {
   return true;
 };
 
+// --- SERMONS ---
+
+const getAllSermons = async () => {
+  const { data, error } = await supabase
+    .from('sermons')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+};
+
+const getSermonsSync = async (lastSync) => {
+  let query = supabase.from('sermons').select('*');
+  
+  if (lastSync) {
+    query = query.gte('updated_at', lastSync);
+  }
+  
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+const addSermon = async (date, title, scriptureReading, memoryVerse, questions, documentUrl, content) => {
+  const { data, error } = await supabase
+    .from('sermons')
+    .insert([
+      { 
+        date, 
+        title, 
+        scripture_reading: scriptureReading, 
+        memory_verse: memoryVerse, 
+        questions: questions || [], 
+        document_url: documentUrl,
+        content
+      }
+    ])
+    .select();
+  
+  if (error) throw error;
+  return data[0];
+};
+
+const updateSermon = async (id, date, title, scriptureReading, memoryVerse, questions, documentUrl, content) => {
+  const updateData = { 
+    date, 
+    title, 
+    scripture_reading: scriptureReading, 
+    memory_verse: memoryVerse,
+    questions: questions || [],
+    content,
+    updated_at: new Date().toISOString() 
+  };
+  
+  if (documentUrl !== undefined) {
+    updateData.document_url = documentUrl;
+  }
+  
+  const { data, error } = await supabase
+    .from('sermons')
+    .update(updateData)
+    .eq('id', id)
+    .select();
+    
+  if (error) throw error;
+  return data && data.length > 0;
+};
+
+const deleteSermon = async (id) => {
+  const { error } = await supabase
+    .from('sermons')
+    .delete()
+    .eq('id', id);
+    
+  if (error) throw error;
+  return true;
+};
+
 module.exports = {
   supabase,
   getAllSongs,
   getSongsSync,
   addSong,
   updateSong,
-  deleteSong
+  deleteSong,
+  getAllSermons,
+  getSermonsSync,
+  addSermon,
+  updateSermon,
+  deleteSermon
 };
