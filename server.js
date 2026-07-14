@@ -173,6 +173,51 @@ app.delete('/api/songs/:id', async (req, res) => {
   }
 });
 
+// Helper function to parse questions cleanly (supports both JSON array format and plain-text line-by-line format)
+function parseQuestions(text) {
+  if (!text || !text.trim()) return [];
+  
+  const trimmed = text.trim();
+  
+  // If it looks like a JSON array, try parsing it as JSON first
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      console.error('JSON parsing failed, falling back to line-by-line text parsing:', e.message);
+    }
+  }
+  
+  // Line-by-line text parsing
+  const lines = trimmed.split(/\r?\n/);
+  const questionsList = [];
+  
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+    
+    // Remove leading list numbers/bullet points like "1. ", "2) ", "- ", "* "
+    line = line.replace(/^\d+[\.\)]\s*/, '').replace(/^[-*]\s*/, '').trim();
+    if (!line) continue;
+    
+    // Check if there is a bible reference at the end of the line, e.g. (John 3:16) or [John 3:16]
+    let question = line;
+    let bibleVerse = '';
+    
+    // Match anything in parentheses or brackets at the end of the line
+    const match = line.match(/[\(\[]([^\]\)]+)[\)\]]$/);
+    if (match) {
+      bibleVerse = match[1].trim();
+      question = line.substring(0, match.index).trim();
+    }
+    
+    questionsList.push({ question, bibleVerse });
+  }
+  
+  return questionsList;
+}
+
 // --- SERMON ROUTES ---
 
 // POST: Add a new sermon
@@ -190,10 +235,7 @@ app.post('/api/sermons', upload.single('document'), async (req, res) => {
       documentUrl = await uploadToSupabase(req.file, 'Sermons');
     }
 
-    let parsedQuestions = [];
-    if (questions) {
-      try { parsedQuestions = JSON.parse(questions); } catch (e) { console.error('Error parsing questions JSON:', e); }
-    }
+    const parsedQuestions = parseQuestions(questions);
 
     const newSermon = await db.addSermon(date, title, scriptureReading, memoryVerse, parsedQuestions, documentUrl, content);
     res.status(201).json({ message: 'Sermon added successfully', sermon: newSermon });
@@ -241,10 +283,7 @@ app.put('/api/sermons/:id', upload.single('document'), async (req, res) => {
       documentUrl = await uploadToSupabase(req.file, 'Sermons');
     }
 
-    let parsedQuestions = [];
-    if (questions) {
-      try { parsedQuestions = JSON.parse(questions); } catch (e) { console.error('Error parsing questions JSON:', e); }
-    }
+    const parsedQuestions = parseQuestions(questions);
 
     const success = await db.updateSermon(req.params.id, date, title, scriptureReading, memoryVerse, parsedQuestions, documentUrl, content);
     if (success) {
