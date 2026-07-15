@@ -178,7 +178,7 @@ app.delete('/api/songs/:id', async (req, res) => {
 // POST: Add a new worship song
 app.post('/api/worship-songs', upload.single('audio'), async (req, res) => {
   try {
-    const { number, title, lyrics } = req.body;
+    const { number, title, lyrics, category } = req.body;
     let audioUrl = null;
 
     if (!number || !title || !lyrics) {
@@ -192,7 +192,7 @@ app.post('/api/worship-songs', upload.single('audio'), async (req, res) => {
       audioUrl = await uploadToSupabase(req.file, 'WorshipSongs');
     }
 
-    const newWorshipSong = await db.addWorshipSong(number, title, lyrics, audioUrl);
+    const newWorshipSong = await db.addWorshipSong(number, title, lyrics, audioUrl, category);
     res.status(201).json({ message: 'Worship song added successfully', song: newWorshipSong });
   } catch (err) {
     console.error('Error adding worship song:', err);
@@ -212,10 +212,11 @@ app.get('/api/worship-songs/sync', async (req, res) => {
   }
 });
 
-// GET: List all worship songs
+// GET: List all worship songs (optionally filter by category)
 app.get('/api/worship-songs', async (req, res) => {
   try {
-    const worshipSongs = await db.getAllWorshipSongs();
+    const category = req.query.category;
+    const worshipSongs = await db.getAllWorshipSongs(category);
     res.json(worshipSongs);
   } catch (err) {
     console.error('Error fetching worship songs:', err);
@@ -226,7 +227,7 @@ app.get('/api/worship-songs', async (req, res) => {
 // PUT: Update an existing worship song
 app.put('/api/worship-songs/:id', upload.single('audio'), async (req, res) => {
   try {
-    const { number, title, lyrics } = req.body;
+    const { number, title, lyrics, category } = req.body;
     let audioUrl = undefined;
 
     if (!number || !title || !lyrics) {
@@ -240,7 +241,7 @@ app.put('/api/worship-songs/:id', upload.single('audio'), async (req, res) => {
       audioUrl = await uploadToSupabase(req.file, 'WorshipSongs');
     }
 
-    const success = await db.updateWorshipSong(req.params.id, number, title, lyrics, audioUrl);
+    const success = await db.updateWorshipSong(req.params.id, number, title, lyrics, audioUrl, category);
     if (success) {
       res.json({ message: 'Worship song updated successfully' });
     } else {

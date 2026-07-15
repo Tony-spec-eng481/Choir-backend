@@ -4,6 +4,7 @@ CREATE TABLE worship_songs (
     number INTEGER NOT NULL,
     title TEXT NOT NULL,
     lyrics TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Nyimbo cia atumwo',
     audio_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
