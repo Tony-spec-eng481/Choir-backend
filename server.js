@@ -173,6 +173,100 @@ app.delete('/api/songs/:id', async (req, res) => {
   }
 });
 
+// --- WORSHIP SONGS API ROUTES ---
+
+// POST: Add a new worship song
+app.post('/api/worship-songs', upload.single('audio'), async (req, res) => {
+  try {
+    const { number, title, lyrics } = req.body;
+    let audioUrl = null;
+
+    if (!number || !title || !lyrics) {
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ error: 'Number, title, and lyrics are required.' });
+    }
+
+    if (req.file) {
+      audioUrl = await uploadToSupabase(req.file, 'WorshipSongs');
+    }
+
+    const newWorshipSong = await db.addWorshipSong(number, title, lyrics, audioUrl);
+    res.status(201).json({ message: 'Worship song added successfully', song: newWorshipSong });
+  } catch (err) {
+    console.error('Error adding worship song:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// GET: Sync worship songs
+app.get('/api/worship-songs/sync', async (req, res) => {
+  try {
+    const lastSync = req.query.lastSync;
+    const worshipSongs = await db.getWorshipSongsSync(lastSync);
+    res.json(worshipSongs);
+  } catch (err) {
+    console.error('Error syncing worship songs:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET: List all worship songs
+app.get('/api/worship-songs', async (req, res) => {
+  try {
+    const worshipSongs = await db.getAllWorshipSongs();
+    res.json(worshipSongs);
+  } catch (err) {
+    console.error('Error fetching worship songs:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT: Update an existing worship song
+app.put('/api/worship-songs/:id', upload.single('audio'), async (req, res) => {
+  try {
+    const { number, title, lyrics } = req.body;
+    let audioUrl = undefined;
+
+    if (!number || !title || !lyrics) {
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ error: 'Number, title, and lyrics are required.' });
+    }
+
+    if (req.file) {
+      audioUrl = await uploadToSupabase(req.file, 'WorshipSongs');
+    }
+
+    const success = await db.updateWorshipSong(req.params.id, number, title, lyrics, audioUrl);
+    if (success) {
+      res.json({ message: 'Worship song updated successfully' });
+    } else {
+      res.status(404).json({ error: 'Worship song not found' });
+    }
+  } catch (err) {
+    console.error('Error updating worship song:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// DELETE: Delete a worship song
+app.delete('/api/worship-songs/:id', async (req, res) => {
+  try {
+    const success = await db.deleteWorshipSong(req.params.id);
+    if (success) {
+      res.json({ message: 'Worship song deleted successfully' });
+    } else {
+      res.status(404).json({ error: 'Worship song not found' });
+    }
+  } catch (err) {
+    console.error('Error deleting worship song:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Helper function to parse questions cleanly (supports both JSON array format and plain-text line-by-line format)
 function parseQuestions(text) {
   if (!text || !text.trim()) return [];
